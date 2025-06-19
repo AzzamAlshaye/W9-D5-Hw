@@ -1,16 +1,16 @@
 import { Router } from "express"
-import { signUp, signIn, signOut } from "../controllers/auth.controller"
+import { signup, signin, signout } from "../controllers/auth.controller"
 import { authorized } from "../middleware/auth.middleware"
 
 const router = Router()
 
 // POST /auth/signup
-router.post("/signup", signUp)
+router.post("/signup", signup)
 
 // POST /auth/signin
-router.post("/signin", signIn)
+router.post("/signin", signin)
 
-// POST /auth/signout (requires a valid access token)
-router.post("/signout", authorized, signOut)
+// POST /auth/signout  (requires valid JWT)
+router.post("/signout", authorized, signout)
 
 export default router

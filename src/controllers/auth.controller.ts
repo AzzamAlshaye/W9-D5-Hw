@@ -1,49 +1,66 @@
 // src/controllers/auth.controller.ts
 
-import { Request, Response, NextFunction } from "express"
-import * as AuthService from "../services/auth.service"
-import { CREATED, OK } from "../utils/http-status"
+import { RequestHandler } from "express"
+import jwt from "jsonwebtoken"
+import { UsersCollection } from "../models/user.model"
+import { jwtConfig } from "../config/jwt"
 import { AppError } from "../utils/error"
+import { CREATED, OK, UNAUTHORIZED, BAD_REQUEST } from "../utils/http-status"
 
-export const signUp = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
+export const signup: RequestHandler = async (req, res, next) => {
   try {
     const { email, password } = req.body
-    const { accessToken } = await AuthService.signUp({ email, password })
+    if (!email || !password) {
+      throw new AppError("Email and password are required", BAD_REQUEST)
+    }
 
-    // Force JSON and status
-    res.status(CREATED).json({ token: accessToken })
+    const existing = await UsersCollection.findOne({ email })
+    if (existing) {
+      throw new AppError("Email already in use", BAD_REQUEST)
+    }
+
+    const user = await UsersCollection.create({ email, password })
+
+    const token = jwt.sign(
+      { sub: user._id },
+      jwtConfig.secret,
+      jwtConfig.accessToken.options
+    )
+
+    res.status(CREATED).json({ token })
   } catch (err) {
     next(err)
   }
 }
 
-export const signIn = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
+export const signin: RequestHandler = async (req, res, next) => {
   try {
     const { email, password } = req.body
-    const { accessToken } = await AuthService.signIn(email, password)
+    if (!email || !password) {
+      throw new AppError("Email and password are required", BAD_REQUEST)
+    }
 
-    res.status(OK).json({ token: accessToken })
+    const user = await UsersCollection.findOne({ email }).select("+password")
+    if (!user || !(await user.comparePassword(password))) {
+      throw new AppError("Invalid credentials", UNAUTHORIZED)
+    }
+
+    const token = jwt.sign(
+      { sub: user._id },
+      jwtConfig.secret,
+      jwtConfig.accessToken.options
+    )
+
+    res.status(OK).json({ token })
   } catch (err) {
     next(err)
   }
 }
 
-export const signOut = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
+export const signout: RequestHandler = async (req, res, next) => {
   try {
-    // your sign-out logic (e.g. blacklist token)…
-    res.sendStatus(OK)
+    // If using a token blacklist, add the token/user here
+    res.status(OK).json({ message: "Signed out successfully" })
   } catch (err) {
     next(err)
   }

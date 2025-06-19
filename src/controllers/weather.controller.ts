@@ -1,6 +1,6 @@
 // src/controllers/weather.controller.ts
 
-import { Request, Response, NextFunction } from "express"
+import { RequestHandler } from "express"
 import axios from "axios"
 import { BAD_REQUEST, OK } from "../utils/http-status"
 import { AppError } from "../utils/error"
@@ -18,11 +18,7 @@ function degToCardinal(deg: number): string {
   return directions[Math.round(deg / 45) % 8]
 }
 
-export const getWeather = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const getWeather: RequestHandler = async (req, res, next) => {
   try {
     const { lat, lon } = req.query
     if (!lat || !lon) {
@@ -33,7 +29,8 @@ export const getWeather = async (
     const now = Date.now()
     const cached = cache.get(key)
     if (cached && cached.expiresAt > now) {
-      return res.status(OK).json(cached.data)
+      res.status(OK).json(cached.data)
+      return
     }
 
     const resp = await axios.get(
@@ -51,12 +48,14 @@ export const getWeather = async (
       source: "openweathermap" as const,
     }
 
+    // Cache the raw payload, but tag future responses as from cache
     cache.set(key, {
       data: { ...payload, source: "cache" },
       expiresAt: now + CACHE_TTL_MS,
     })
 
-    return res.status(OK).json(payload)
+    res.status(OK).json(payload)
+    // no `return res…`, just return void
   } catch (err) {
     next(err)
   }

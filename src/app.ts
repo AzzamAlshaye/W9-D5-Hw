@@ -8,6 +8,7 @@ import logger from "./utils/logger"
 import { dev, port } from "./utils/helpers"
 import userRouter from "./routes/user.routes"
 import historyRouter from "./routes/history.routes"
+import weatherRoutes from "./routes/weather.routes"
 import { connectDB } from "./config/database"
 import { OK, INTERNAL_SERVER_ERROR } from "./utils/http-status"
 import { errorHandler } from "./middleware/error.middleware"
@@ -35,7 +36,13 @@ app.use(express.urlencoded({ extended: true }))
 // ─── Routes ────────────────────────────────────────────────────────────────────
 // Make sure this comes *after* express.json() and *before* your error handler
 app.use("/auth", userRouter)
+
+//history endpoint
 app.use("/history", historyRouter)
+
+//weather endpoint
+// **this line is required** for GET /weather
+app.use("/weather", weatherRoutes)
 
 app.use(errorHandler)
 // Health check

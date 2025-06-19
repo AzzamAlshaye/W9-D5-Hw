@@ -36,13 +36,11 @@ app.use(express.urlencoded({ extended: true }))
 // ─── Routes ────────────────────────────────────────────────────────────────────
 // Make sure this comes *after* express.json() and *before* your error handler
 app.use("/auth", userRouter)
-
-//history endpoint
-app.use("/history", historyRouter)
-
 //weather endpoint
 // **this line is required** for GET /weather
 app.use("/weather", weatherRoutes)
+//history endpoint
+app.use("/history", historyRouter)
 
 app.use(errorHandler)
 // Health check

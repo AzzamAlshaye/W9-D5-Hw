@@ -1,21 +1,30 @@
-// src/controllers/weather.controller.ts
-
 import { RequestHandler } from "express"
 import axios from "axios"
 import { BAD_REQUEST, OK } from "../utils/http-status"
 import { AppError } from "../utils/error"
+import { HistoryCollection } from "../models/history.model"
 
-const API_KEY = process.env.OPENWEATHER_API_KEY
-if (!API_KEY) {
-  throw new Error("Missing OPENWEATHER_API_KEY in environment")
+const API_KEY = process.env.OPENWEATHER_API_KEY!
+const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+
+// Cache only the *raw* weather data (no source flag)
+const cache = new Map<
+  string,
+  { data: Omit<WeatherPayload, "source">; expiresAt: number }
+>()
+
+interface WeatherPayload {
+  temperature: number
+  humidity: number
+  conditions: string
+  windSpeed: number
+  windDirection: string
+  source: "openweathermap" | "cache"
 }
 
-const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
-const cache = new Map<string, { data: any; expiresAt: number }>()
-
 function degToCardinal(deg: number): string {
-  const directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
-  return directions[Math.round(deg / 45) % 8]
+  const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+  return dirs[Math.round(deg / 45) % 8]
 }
 
 export const getWeather: RequestHandler = async (req, res, next) => {
@@ -27,35 +36,61 @@ export const getWeather: RequestHandler = async (req, res, next) => {
 
     const key = `${lat},${lon}`
     const now = Date.now()
-    const cached = cache.get(key)
-    if (cached && cached.expiresAt > now) {
-      res.status(OK).json(cached.data)
+    const entry = cache.get(key)
+
+    if (entry && entry.expiresAt > now) {
+      // record cache‐hit
+      await HistoryCollection.create({
+        lat: Number(lat),
+        lon: Number(lon),
+        requestedAt: new Date(),
+        source: "cache",
+      })
+
+      // return with source = "cache"
+      const payload: WeatherPayload = {
+        ...entry.data,
+        source: "cache",
+      }
+      res.status(OK).json(payload)
       return
     }
 
+    // cache‐miss → fetch fresh
     const resp = await axios.get(
       "https://api.openweathermap.org/data/2.5/weather",
       { params: { lat, lon, appid: API_KEY, units: "metric" } }
     )
 
     const body = resp.data
-    const payload = {
+    const baseData = {
       temperature: body.main.temp,
       humidity: body.main.humidity,
       conditions: body.weather[0].description,
       windSpeed: body.wind.speed,
       windDirection: degToCardinal(body.wind.deg),
-      source: "openweathermap" as const,
     }
 
-    // Cache the raw payload, but tag future responses as from cache
+    // cache the *baseData* only
     cache.set(key, {
-      data: { ...payload, source: "cache" },
+      data: baseData,
       expiresAt: now + CACHE_TTL_MS,
     })
 
+    // record cache‐miss
+    await HistoryCollection.create({
+      lat: Number(lat),
+      lon: Number(lon),
+      requestedAt: new Date(),
+      source: "openweathermap",
+    })
+
+    // return with source = "openweathermap"
+    const payload: WeatherPayload = {
+      ...baseData,
+      source: "openweathermap",
+    }
     res.status(OK).json(payload)
-    // no `return res…`, just return void
   } catch (err) {
     next(err)
   }

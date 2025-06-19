@@ -6,6 +6,7 @@ import { UsersCollection } from "../models/user.model"
 import { jwtConfig } from "../config/jwt"
 import { AppError } from "../utils/error"
 import { CREATED, OK, UNAUTHORIZED, BAD_REQUEST } from "../utils/http-status"
+import { tokenBlacklist } from "../config/tokenBlacklist"
 
 export const signup: RequestHandler = async (req, res, next) => {
   try {
@@ -20,7 +21,6 @@ export const signup: RequestHandler = async (req, res, next) => {
     }
 
     const user = await UsersCollection.create({ email, password })
-
     const token = jwt.sign(
       { sub: user._id },
       jwtConfig.secret,
@@ -59,8 +59,15 @@ export const signin: RequestHandler = async (req, res, next) => {
 
 export const signout: RequestHandler = async (req, res, next) => {
   try {
-    // If using a token blacklist, add the token/user here
-    res.status(OK).json({ message: "Signed out successfully" })
+    const authHeader = req.headers.authorization
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      throw new AppError("No token provided", UNAUTHORIZED)
+    }
+
+    const token = authHeader.split(" ")[1]
+    tokenBlacklist.add(token)
+
+    res.status(OK).json({ success: true, message: "Signed out successfully" })
   } catch (err) {
     next(err)
   }

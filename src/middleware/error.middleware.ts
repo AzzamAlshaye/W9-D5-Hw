@@ -1,23 +1,23 @@
-import { Request, Response, NextFunction } from "express"
-import { AppError } from "../utils/error" // your AppError class
+// src/utils/error.middleware.ts
 
-export function errorHandler(
-  err: Error | AppError,
-  req: Request,
-  res: Response,
-  next: NextFunction
-) {
-  console.error(err) // so you can see stack traces in your console
+import { ErrorRequestHandler } from "express"
+import { AppError } from "../utils/error"
 
-  // If it's an instance of your AppError, use its statusCode + message:
+export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
+  console.error(err) // Log for your own debugging
+
   if (err instanceof AppError) {
-    return res
-      .status(err.statusCode)
-      .json({ success: false, message: err.message })
+    // Send the custom AppError status/message
+    res.status(err.statusCode).json({
+      success: false,
+      message: err.message,
+    })
+    return
   }
-
-  // Otherwise, it's a 500
-  return res
-    .status(500)
-    .json({ success: false, message: "Something went wrong!" })
+  // Fallback for any other errors
+  res.status(500).json({
+    success: false,
+    message: "Something went wrong!",
+  })
+  // no `return res...` here either
 }

@@ -10,6 +10,7 @@ import userRouter from "./routes/user.routes"
 import historyRouter from "./routes/history.routes"
 import { connectDB } from "./config/database"
 import { OK, INTERNAL_SERVER_ERROR } from "./utils/http-status"
+import { errorHandler } from "./middleware/error.middleware"
 
 // Load environment variables
 dotenv.config()
@@ -36,6 +37,7 @@ app.use(express.urlencoded({ extended: true }))
 app.use("/auth", userRouter)
 app.use("/history", historyRouter)
 
+app.use(errorHandler)
 // Health check
 app.get("/", (_req: Request, res: Response<{ message: string }>) => {
   res.status(OK).json({ message: "API is running!" })

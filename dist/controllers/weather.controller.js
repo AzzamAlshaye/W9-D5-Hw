@@ -10,7 +10,6 @@ const error_1 = require("../utils/error");
 const history_model_1 = require("../models/history.model");
 const API_KEY = process.env.OPENWEATHER_API_KEY;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-// Cache only the *raw* weather data (no source flag)
 const cache = new Map();
 function degToCardinal(deg) {
     const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
@@ -26,22 +25,19 @@ const getWeather = async (req, res, next) => {
         const now = Date.now();
         const entry = cache.get(key);
         if (entry && entry.expiresAt > now) {
-            // record cache‐hit
+            // cache‐hit: record and send
             await history_model_1.HistoryCollection.create({
                 lat: Number(lat),
                 lon: Number(lon),
                 requestedAt: new Date(),
                 source: "cache",
-            });
-            // return with source = "cache"
-            const payload = {
                 ...entry.data,
-                source: "cache",
-            };
+            });
+            const payload = { ...entry.data, source: "cache" };
             res.status(http_status_1.OK).json(payload);
-            return;
+            return; // <— return void, not Response
         }
-        // cache‐miss → fetch fresh
+        // cache‐miss: fetch fresh
         const resp = await axios_1.default.get("https://api.openweathermap.org/data/2.5/weather", { params: { lat, lon, appid: API_KEY, units: "metric" } });
         const body = resp.data;
         const baseData = {
@@ -51,24 +47,22 @@ const getWeather = async (req, res, next) => {
             windSpeed: body.wind.speed,
             windDirection: degToCardinal(body.wind.deg),
         };
-        // cache the *baseData* only
+        // cache it
         cache.set(key, {
             data: baseData,
             expiresAt: now + CACHE_TTL_MS,
         });
-        // record cache‐miss
+        // record
         await history_model_1.HistoryCollection.create({
             lat: Number(lat),
             lon: Number(lon),
             requestedAt: new Date(),
             source: "openweathermap",
-        });
-        // return with source = "openweathermap"
-        const payload = {
             ...baseData,
-            source: "openweathermap",
-        };
+        });
+        const payload = { ...baseData, source: "openweathermap" };
         res.status(http_status_1.OK).json(payload);
+        // no return needed here—function ends and resolves to void
     }
     catch (err) {
         next(err);

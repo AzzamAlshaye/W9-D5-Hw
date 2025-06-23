@@ -1,37 +1,34 @@
 // src/controllers/history.controller.ts
-
 import { Request, Response, NextFunction } from "express"
-import { HistoryCollection } from "../models/history.model"
-import { AppError } from "../utils/error"
-import { OK, BAD_REQUEST } from "../utils/http-status"
+import {
+  parseHistoryParams,
+  getHistoryCount,
+  getHistoryEntries,
+} from "../service/history.service"
+import { OK } from "../utils/http-status"
+
+// Extend Express Request to include authenticated user with string ID
+interface AuthenticatedRequest extends Request {
+  user?: { _id: string }
+}
 
 export const getHistory = async (
-  req: Request,
+  req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { limit, skip, sort, count } = req.query
+    const rawUserId = req.user?._id
 
-    // If ?count=true, just return the total
-    if (count === "true") {
-      const total = await HistoryCollection.countDocuments()
+    if (req.query.count === "true") {
+      const { userId } = parseHistoryParams({}, rawUserId)
+      const total = await getHistoryCount(userId)
       res.status(OK).json({ total })
       return
     }
 
-    // Parse pagination & sorting
-    const l = limit ? parseInt(limit as string, 10) : 10
-    const s = skip ? parseInt(skip as string, 10) : 0
-    const sortBy = (sort as string) || "-requestedAt"
-
-    if (isNaN(l) || isNaN(s)) {
-      throw new AppError("limit and skip must be valid numbers", BAD_REQUEST)
-    }
-
-    // Fetch the entries
-    const entries = await HistoryCollection.find().sort(sortBy).skip(s).limit(l)
-
+    const params = parseHistoryParams(req.query as any, rawUserId)
+    const entries = await getHistoryEntries(params)
     res.status(OK).json(entries)
   } catch (err) {
     next(err)
